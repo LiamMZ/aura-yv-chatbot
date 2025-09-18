@@ -705,6 +705,27 @@ export function Chat() {
           } catch (error) {
             console.error("Session creation failed:", error);
           }
+        } else {
+          // User declined cookies - create temporary session (not stored in cookies)
+          console.log("User declined cookies - creating temporary session");
+          try {
+            const response = await fetch(`/api/sessions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                user_agent: navigator.userAgent,
+                initial_context: {}
+              })
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log("Temporary session created:", data);
+              setSessionId(data.session_id);
+            }
+          } catch (error) {
+            console.error("Temporary session creation failed:", error);
+          }
         }
       } else {
         console.log("No consent cookie found - banner should show");
