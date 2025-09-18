@@ -104,6 +104,11 @@ export function MultimodalInput({
   
   // User profile selection
   const [userProfile, setUserProfile] = useLocalStorage<UserProfile>('yale-user-profile', null);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -166,7 +171,7 @@ export function MultimodalInput({
         <>
           {/* User Profile Selection */}
           {!userProfile && (
-            <div className="flex flex-col gap-4 w-full">
+            <div className="flex flex-col gap-4 w-full" suppressHydrationWarning>
               <div className="text-center">
                 <h3 className="text-lg font-medium mb-2">Welcome to Yale Ventures AI Assistant</h3>
                 <p className="text-muted-foreground text-sm">Please select your role to get started:</p>
@@ -212,7 +217,7 @@ export function MultimodalInput({
 
           {/* Suggested Actions - Only show after profile is selected */}
           {userProfile && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4" suppressHydrationWarning>
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">
                   {userProfile === 'student' ? 'Student Resources' : 'Faculty Resources'}

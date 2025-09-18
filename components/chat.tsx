@@ -54,6 +54,7 @@ export function Chat() {
   const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
   const [messageCitations, setMessageCitations] = useState<Record<string, any[]>>({});
   const [backendCitationsLoaded, setBackendCitationsLoaded] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
 
 
@@ -167,10 +168,8 @@ export function Chat() {
   const resetConversation = async () => {
     if (sessionId) {
       try {
-        // Use relative URLs in production to go through Next.js rewrites
-        const apiUrl = process.env.NODE_ENV === 'development' 
-          ? 'http://localhost:8000' 
-          : '';
+        // Use relative URLs to go through Next.js rewrites
+        const apiUrl = '';
         
         const response = await fetch(`${apiUrl}/api/sessions/${sessionId}/reset`, {
           method: 'POST'
@@ -200,6 +199,12 @@ export function Chat() {
     setMessageCitations({});
     setCurrentMessageId('');
     
+    // Clear session cookie and reset cookie consent
+    console.log("Clearing session cookie and resetting cookie consent...");
+    deleteCookie('yale-ventures-session');
+    setSessionId(null);
+    setCookieConsent(null);
+    
     // Then, reset the backend session to ensure conversation is truly cleared
     if (sessionId) {
       try {
@@ -222,7 +227,7 @@ export function Chat() {
       console.warn("No session ID available - only frontend cleared");
     }
     
-    console.log("Chat and citations cleared completely");
+    console.log("Chat, citations, cookie, and consent cleared completely");
   };
 
   // Load citation history for existing session
@@ -349,8 +354,8 @@ export function Chat() {
       const lastMessage = body.messages?.[body.messages.length - 1];
       
       if (lastMessage) {
-        // Wait for session to be created if it's not ready yet
-        if (!sessionId) {
+        // Wait for hydration and session to be created if it's not ready yet
+        if (!isHydrated || !sessionId) {
           console.log("Session not ready, waiting...");
           toast.error("Session not ready. Please wait a moment and try again.");
           throw new Error("Session not ready");
@@ -366,9 +371,8 @@ export function Chat() {
         
         console.log("Sending request:", backendBody);
         
-        const apiUrl = process.env.NODE_ENV === 'development' 
-          ? 'http://localhost:8000' 
-          : '';
+        // Use relative URLs to go through Next.js rewrites
+        const apiUrl = '';
         
         const response = await fetch(`${apiUrl}/api/chat`, {
           ...init,
@@ -482,13 +486,8 @@ export function Chat() {
                 
                 // Sync the data to frontend database
                 const syncResponse = await fetch('/api/sessions/sync-data', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    session_id: sessionId,
-                    backend_session_data: backendSessionData,
-                    extracted_data: null // Backend handles extraction internally
-                  })
+                  method: 'GET',
+                  headers: { 'Content-Type': 'application/json' }
                 });
                 
                 if (syncResponse.ok) {
@@ -583,9 +582,21 @@ export function Chat() {
     }
   });
 
-  // Check for existing session and cookie consent on mount
+  // Hydration effect - run immediately on mount
   useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Check for existing session and cookie consent on mount - run only once after hydration
+  useEffect(() => {
+    if (!isHydrated) return; // Wait for hydration
+    
+    let hasInitialized = false;
+    
     const checkExistingSession = async () => {
+      if (hasInitialized) return;
+      hasInitialized = true;
+      
       console.log("=== INITIALIZING APP ===");
       console.log("All cookies:", document.cookie);
       
@@ -601,8 +612,25 @@ export function Chat() {
         deleteCookie('yale-ventures-session');
         // Clear messages
         setMessages([]);
-        // Create new session
-        await createNewSession();
+        // Create new session directly without dependency
+        try {
+          const response = await fetch(`/api/sessions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_agent: navigator.userAgent,
+              initial_context: {}
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log("Session created:", data);
+            setSessionId(data.session_id);
+          }
+        } catch (error) {
+          console.error("Session creation failed:", error);
+        }
         return;
       }
       
@@ -623,24 +651,13 @@ export function Chat() {
           if (existingSessionId) {
             // Validate session is still active - try backend first
             try {
-              // Always use relative URLs to go through Next.js rewrites
-              // This avoids CORS issues and uses the BACKEND_URL from next.config.js
-              const apiUrl = '';
-              
-              let response = await fetch(`${apiUrl}/api/sessions/${existingSessionId}`);
-              
-              // If backend fails, try local Next.js API as fallback
-              if (!response.ok && response.status >= 500) {
-                console.log("Backend session check failed, trying local API...");
-                response = await fetch(`/api/sessions/${existingSessionId}`);
-              }
+              let response = await fetch(`/api/sessions/${existingSessionId}`);
               
               if (response.ok) {
                 console.log("Restored existing session:", existingSessionId);
                 setSessionId(existingSessionId);
                 
-                // Note: Conversation history restoration might not work with Railway backend
-                // This is typically handled differently in the backend
+                // Try to restore conversation history
                 try {
                   const historyResponse = await fetch(`/api/sessions/${existingSessionId}/history`);
                   if (historyResponse.ok) {
@@ -669,8 +686,25 @@ export function Chat() {
             }
           }
           
-          // Only create new session if user has consented and no valid session exists
-          await createNewSession();
+          // Create new session directly if user has consented and no valid session exists
+          try {
+            const response = await fetch(`/api/sessions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                user_agent: navigator.userAgent,
+                initial_context: {}
+              })
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log("Session created:", data);
+              setSessionId(data.session_id);
+            }
+          } catch (error) {
+            console.error("Session creation failed:", error);
+          }
         }
       } else {
         console.log("No consent cookie found - banner should show");
@@ -679,7 +713,7 @@ export function Chat() {
     };
 
     checkExistingSession();
-  }, [createNewSession, setMessages]);
+  }, [isHydrated]); // Run once after hydration
 
   const [messagesContainerRef, messagesEndRef, scrollToBottom] =
     useScrollToBottom<HTMLDivElement>();
@@ -701,7 +735,7 @@ export function Chat() {
   return (
     <div className="flex flex-col min-w-0 h-[calc(100dvh-52px)] bg-background relative">
       {/* Cookie Consent Banner */}
-      {cookieConsent === null && (
+      {isHydrated && cookieConsent === null && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-50">
           <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-gray-600">
@@ -935,7 +969,7 @@ export function Chat() {
         />
       </div>
 
-      <form className={`flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl ${cookieConsent === null ? 'mb-20' : ''}`}>
+      <form className={`flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl ${isHydrated && cookieConsent === null ? 'mb-20' : ''}`}>
         <MultimodalInput
           chatId={chatId}
           input={input}

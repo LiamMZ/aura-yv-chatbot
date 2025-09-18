@@ -87,7 +87,7 @@ export const YaleVenturesIcon = ({ size = 24 }: { size?: number }) => {
       className="object-contain"
       style={{ 
         filter: 'none',
-        width: `${size}px`,
+        width: 'auto',
         height: 'auto'
       }}
     />

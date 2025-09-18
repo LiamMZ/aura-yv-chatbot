@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma generate && npm run build",
+  "buildCommand": "npm run prebuild && prisma generate && npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
   "headers": [
@@ -22,7 +22,54 @@
       "maxDuration": 30
     }
   },
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "rewrites": [
+    {
+      "source": "/api/sessions",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/sessions"
+    },
+    {
+      "source": "/api/sessions/sync-data",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/sessions/sync-data"
+    },
+    {
+      "source": "/api/sessions/(.*)",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/sessions/$1"
+    },
+    {
+      "source": "/api/chat",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/chat"
+    },
+    {
+      "source": "/api/data-extraction",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/data-extraction"
+    },
+    {
+      "source": "/api/admin/user-data",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/admin/user-data"
+    },
+    {
+      "source": "/api/admin/stats",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/admin/stats"
+    },
+    {
+      "source": "/api/admin/feedback",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/admin/feedback"
+    },
+    {
+      "source": "/api/admin/sessions",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/admin/sessions"
+    },
+    {
+      "source": "/api/feedback",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/feedback"
+    },
+    {
+      "source": "/api/messages/(.*)",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/messages/$1"
+    },
+    {
+      "source": "/api/health",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/health"
+    }
+  ]
 }
