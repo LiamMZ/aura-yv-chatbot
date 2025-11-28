@@ -412,30 +412,6 @@ export function Chat() {
         );
       }
     },
-    experimental_onFunctionCall: async (chatMessages, functionCall) => {
-      // Handle citations data from streaming
-      if (functionCall.name === 'citations' && functionCall.arguments) {
-        const citationData = JSON.parse(functionCall.arguments);
-        console.log("📚 Received citations from stream:", citationData);
-
-        if (citationData.citations && citationData.citations.length > 0) {
-          const formattedCitations = citationData.citations.map((citation: any) => ({
-            rank: citation.rank || 1,
-            document: citation.document || citation.source || 'Unknown Source',
-            relevance_score: citation.relevance_score || citation.score || 0,
-            content: citation.content || '',
-            metadata: citation.metadata || {},
-            messageId: '',
-            userMessage: chatMessages[chatMessages.length - 2]?.content || '',
-            aiResponse: chatMessages[chatMessages.length - 1]?.content || ''
-          }));
-
-          // Store citations for the latest message
-          setPendingCitations(formattedCitations);
-          console.log("📚 Stored pending citations:", formattedCitations.length);
-        }
-      }
-    },
     onFinish: (message: any) => {
       // Store citations for the last assistant message if available
       if (message.role === 'assistant' && message.id && message.content) {

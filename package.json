@@ -55,6 +55,6 @@
     "usehooks-ts": "^3.1.0"
   },
   "devDependencies": {
-    "dotenv": "^17.2.2"
+    "dotenv": "^17.2.3"
   }
 }
