@@ -22,46 +22,35 @@ const MarkdownWithCitations = ({
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  // Safe citation processing that won't cause hydration errors
   React.useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !citations?.length) return;
 
-    // Find and style citation markers after markdown is rendered
-    const container = containerRef.current;
-    const walker = document.createTreeWalker(
-      container,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
+    // Use a safer approach for client-side only execution
+    if (typeof window !== 'undefined') {
+      // Add a small delay to ensure DOM is fully rendered
+      const timer = setTimeout(() => {
+        const container = containerRef.current;
+        if (!container) return;
 
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-      if (node.textContent?.includes('[') && node.textContent.includes(']')) {
-        textNodes.push(node);
-      }
+        // Simple regex replace approach without DOM manipulation
+        const elements = container.querySelectorAll('p, span, div');
+        elements.forEach(element => {
+          if (element.textContent?.includes('[') && element.textContent?.includes(']')) {
+            const newHTML = element.innerHTML.replace(
+              /\[(\d+)\]/g,
+              '<span class="citation-marker" data-citation="$1" style="color: #2563eb; cursor: pointer; font-weight: 600; text-decoration: underline; font-size: 0.875em; padding: 0 2px; border-radius: 2px; transition: all 0.2s;">[$1]</span>'
+            );
+            if (newHTML !== element.innerHTML) {
+              element.innerHTML = newHTML;
+            }
+          }
+        });
+      }, 100);
+
+      return () => clearTimeout(timer);
     }
-
-    // Process each text node to wrap citation markers
-    textNodes.forEach(textNode => {
-      const parent = textNode.parentNode as HTMLElement;
-      if (!parent) return;
-
-      const text = textNode.textContent || '';
-      if (text.match(/\[\d+\]/)) {
-        // Replace text with HTML that includes styled citation markers
-        const html = text.replace(
-          /\[(\d+)\]/g,
-          '<span class="citation-marker" data-citation="$1" style="color: #2563eb; cursor: pointer; font-weight: 600; text-decoration: underline; font-size: 0.875em; padding: 0 2px; border-radius: 2px; transition: all 0.2s;">[$1]</span>'
-        );
-        
-        if (html !== text) {
-          const wrapper = document.createElement('span');
-          wrapper.innerHTML = html;
-          parent.replaceChild(wrapper, textNode);
-        }
-      }
-    });
-  }, [content]);
+  }, [content, citations]);
 
   return (
     <div 

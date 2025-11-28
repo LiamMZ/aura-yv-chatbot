@@ -352,12 +352,12 @@ export const ArtifactWidget = ({
     // Calculate if citation has actionable links (not file-based links that redirect to coming soon)
     const hasActionableLinks = (() => {
       if (citation.metadata?.notion_url) return true;
-      
+
       if (citation.metadata?.source_url) {
         // Only count as actionable if it's a website, not a file
         return !isFileUrl(citation.metadata.source_url);
       }
-      
+
       // Download URLs are not actionable yet (redirect to coming soon)
       return false;
     })();
@@ -427,48 +427,21 @@ export const ArtifactWidget = ({
                   </Button>
                 )}
                 
-                {/* View Document from our database */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const documentId = encodeURIComponent(citation.document || 'unknown');
-                    window.open(`/api/docs/${documentId}`, '_blank');
-                  }}>
-                  <FileText className="h-3 w-3 mr-1" />
-                  View Full Document
-                </Button>
                 
-                {citation.metadata?.source_url && (
-                  isFileUrl(citation.metadata.source_url) ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Open our document API endpoint
-                        const documentId = encodeURIComponent(citation.document || 'unknown');
-                        window.open(`/documents/${documentId}`, '_blank');
-                      }}>
-                      <Eye className="h-3 w-3 mr-1" />
-                      View Document
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const enhancedUrl = createSectionSpecificLink(citation);
-                        window.open(enhancedUrl, '_blank');
-                      }}
-                      className="flex items-center gap-1"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Open Link
-                    </Button>
-                  )
+{citation.metadata?.source_url && !isFileUrl(citation.metadata.source_url) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const enhancedUrl = createSectionSpecificLink(citation);
+                      window.open(enhancedUrl, '_blank');
+                    }}
+                    className="flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open Link
+                  </Button>
                 )}
                 
                 {citation.metadata?.download_url && (

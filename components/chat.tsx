@@ -192,31 +192,31 @@ export function Chat() {
 
   const clearChat = async () => {
     console.log("Clearing chat and citations...");
-    
+
     // First, clear the frontend state immediately for responsive UI
     setMessages([]);
     setPendingCitations([]);
     setMessageCitations({});
     setCurrentMessageId('');
-    
+
     // Clear session cookie and reset cookie consent
     console.log("Clearing session cookie and resetting cookie consent...");
     deleteCookie('yale-ventures-session');
     setSessionId(null);
     setCookieConsent(null);
-    
+
     // Then, reset the backend session to ensure conversation is truly cleared
     if (sessionId) {
       try {
         console.log("Resetting backend session:", sessionId);
         await resetConversation();
         console.log("Backend session reset successfully");
-        
-        // Ensure we clear any cached citation data for this session 
+
+        // Ensure we clear any cached citation data for this session
         // (in case there are any lingering references)
         setMessageCitations({});
         setPendingCitations([]);
-        
+
       } catch (error) {
         console.error("Failed to reset backend session:", error);
         // Note: We still keep the frontend cleared even if backend fails
@@ -226,8 +226,12 @@ export function Chat() {
     } else {
       console.warn("No session ID available - only frontend cleared");
     }
-    
+
     console.log("Chat, citations, cookie, and consent cleared completely");
+
+    // Create a new session after clearing
+    console.log("Creating new session after clearing...");
+    await createNewSession();
   };
 
   // Load citation history for existing session
@@ -374,158 +378,27 @@ export function Chat() {
         // Use relative URLs to go through Next.js rewrites
         const apiUrl = '';
         
-        const response = await fetch(`${apiUrl}/api/chat`, {
+        const response = await fetch(`${apiUrl}/api/chat/stream`, {
           ...init,
-          body: JSON.stringify(backendBody)
+          body: JSON.stringify({
+            messages: [{
+              role: lastMessage.role,
+              content: lastMessage.content
+            }],
+            session_id: sessionId
+          })
         });
         
         console.log("Response status:", response.status);
         
         if (response.ok) {
-          // Check if response is already streaming (has the right content-type)
-          const contentType = response.headers.get('content-type');
-          if (contentType === 'text/plain' && response.headers.get('x-vercel-ai-data-stream') === 'v1') {
-            // Response is already in streaming format, pass it through
-            console.log("Received streaming response from backend");
-            return response;
-          } else {
-            // Fallback: convert JSON response to streaming format
-            const data = await response.json();
-            console.log("Response data:", data);
-            
-            // Store citations for display
-            if (data.citations && Array.isArray(data.citations) && data.citations.length > 0) {
-              console.log("=== CITATIONS RECEIVED FROM BACKEND ===");
-              console.log("Raw citations data:", data.citations);
-              console.log("Citations count:", data.citations.length);
-              
-              const formattedCitations = convertBackendCitations(data.citations);
-              console.log("Formatted citations:", formattedCitations);
-              
-              // Store citations with response content hash for reliable matching
-              const responseContent = data.response || '';
-              const contentHash = responseContent.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
-              
-              const enhancedCitations = formattedCitations.map(citation => ({
-                ...citation,
-                userMessage: messages[messages.length - 1]?.content || 'Previous question', // Get user's question
-                aiResponse: responseContent // Store the AI's response
-              }));
-              
-              // Store citations immediately using content hash
-              const contentKey = `content_${contentHash}`;
-              setMessageCitations(prev => {
-                const updated = { ...prev, [contentKey]: enhancedCitations };
-                console.log(`Stored citations with content key: ${contentKey}`, updated);
-                return updated;
-              });
-              
-              // Display citations immediately
-              setPendingCitations(enhancedCitations);
-              console.log("Enhanced citations stored immediately:", enhancedCitations);
-              
-              // Try to link to the actual AI message when it becomes available
-              let retryCount = 0;
-              const maxRetries = 10;
-              
-              const linkCitationsToMessage = () => {
-                setTimeout(() => {
-                  // Look for a message with matching content
-                  const matchingMessage = messages.find((msg: any) => 
-                    msg.role === 'assistant' && 
-                    msg.content && 
-                    responseContent.length > 100 &&
-                    msg.content.includes(responseContent.substring(0, 100))
-                  );
-                  
-                  if (matchingMessage && matchingMessage.id) {
-                    console.log(`Found matching AI message with ID: ${matchingMessage.id}`);
-                    
-                    // Store citations with the actual message ID
-                    setMessageCitations(prev => {
-                      const updated = { ...prev };
-                      updated[matchingMessage.id] = enhancedCitations.map(citation => ({
-                        ...citation,
-                        messageId: matchingMessage.id
-                      }));
-                      console.log(`Linked citations to message ID ${matchingMessage.id}:`, updated);
-                      return updated;
-                    });
-                    
-                    // Clear pending citations since they're now properly stored
-                    setPendingCitations([]);
-                    console.log(`Successfully linked citations to AI message: ${matchingMessage.id}`);
-                  } else if (retryCount < maxRetries) {
-                    retryCount++;
-                    console.log(`Retry ${retryCount}/${maxRetries}: AI message not found yet, retrying...`);
-                    linkCitationsToMessage();
-                  } else {
-                    console.log(`Max retries reached. Keeping citations with content key: ${contentKey}`);
-                  }
-                }, 100 * (retryCount + 1)); // Exponential backoff
-              };
-              
-              linkCitationsToMessage();
-            } else {
-              console.log("=== NO CITATIONS IN BACKEND RESPONSE ===");
-              console.log("Response data keys:", Object.keys(data));
-              console.log("Citations field:", data.citations);
-              console.log("Response field:", data.response);
-              console.log("Full response data:", data);
-            }
-            
-            // Sync user data extracted by backend to frontend database
-            try {
-              console.log("Syncing user data from backend response...");
-              
-              // First, get the current backend session data to extract user info
-              const backendSessionResponse = await fetch(`${apiUrl}/api/sessions/${sessionId}`);
-              if (backendSessionResponse.ok) {
-                const backendSessionData = await backendSessionResponse.json();
-                console.log("Backend session data:", backendSessionData);
-                
-                // Sync the data to frontend database
-                const syncResponse = await fetch('/api/sessions/sync-data', {
-                  method: 'GET',
-                  headers: { 'Content-Type': 'application/json' }
-                });
-                
-                if (syncResponse.ok) {
-                  const syncResult = await syncResponse.json();
-                  console.log("User data sync result:", syncResult);
-                } else {
-                  console.warn("Failed to sync user data:", await syncResponse.text());
-                }
-              } else {
-                console.warn("Failed to fetch backend session data for sync");
-              }
-            } catch (syncError) {
-              console.warn("User data sync failed:", syncError);
-              // Don't let sync failures break the chat flow
-            }
-            
-            // Create a simple streaming response that the AI SDK can handle
-            const encoder = new TextEncoder();
-            const stream = new ReadableStream({
-              start(controller) {
-                // Send the content in the correct AI SDK format
-                controller.enqueue(encoder.encode(`0:${JSON.stringify(data.response)}\n`));
-                controller.enqueue(encoder.encode(`e:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0},"isContinued":false}\n`));
-                controller.close();
-              }
-            });
-            
-            return new Response(stream, {
-              headers: { 
-                'content-type': 'text/plain',
-                'x-vercel-ai-data-stream': 'v1' 
-              }
-            });
-          }
+          // Response should be streaming format from /api/chat/stream
+          console.log("Received streaming response from backend");
+          return response;
         } else {
           const errorText = await response.text();
-          console.error("API Error:", response.status, errorText);
-          throw new Error(`API Error: ${response.status} - ${errorText}`);
+          console.error("Streaming API Error:", response.status, errorText);
+          throw new Error(`Streaming API Error: ${response.status} - ${errorText}`);
         }
       }
       
@@ -539,45 +412,48 @@ export function Chat() {
         );
       }
     },
+    experimental_onFunctionCall: async (chatMessages, functionCall) => {
+      // Handle citations data from streaming
+      if (functionCall.name === 'citations' && functionCall.arguments) {
+        const citationData = JSON.parse(functionCall.arguments);
+        console.log("📚 Received citations from stream:", citationData);
+
+        if (citationData.citations && citationData.citations.length > 0) {
+          const formattedCitations = citationData.citations.map((citation: any) => ({
+            rank: citation.rank || 1,
+            document: citation.document || citation.source || 'Unknown Source',
+            relevance_score: citation.relevance_score || citation.score || 0,
+            content: citation.content || '',
+            metadata: citation.metadata || {},
+            messageId: '',
+            userMessage: chatMessages[chatMessages.length - 2]?.content || '',
+            aiResponse: chatMessages[chatMessages.length - 1]?.content || ''
+          }));
+
+          // Store citations for the latest message
+          setPendingCitations(formattedCitations);
+          console.log("📚 Stored pending citations:", formattedCitations.length);
+        }
+      }
+    },
     onFinish: (message: any) => {
       // Store citations for the last assistant message if available
       if (message.role === 'assistant' && message.id && message.content) {
         console.log("Message finished:", message.id, message.content);
-        
-        // Try to link any pending citations to this message
-        setTimeout(() => {
-          const messageContent = message.content || '';
-          const contentHash = messageContent.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
-          const contentKey = `content_${contentHash}`;
-          
-          setMessageCitations(prev => {
-            const updated = { ...prev };
-            
-            // If we have citations stored with content hash, link them to the message ID
-            if (updated[contentKey]) {
-              const citations = updated[contentKey];
-              updated[message.id] = citations.map(citation => ({
-                ...citation,
-                messageId: message.id
-              }));
-              console.log(`onFinish: Linked citations from ${contentKey} to message ID ${message.id}`);
-            }
-            
-            return updated;
-          });
-          
-          // Clear pending citations if they match this message
-          setPendingCitations(prev => {
-            const shouldClear = prev.some(citation => 
-              citation.aiResponse && messageContent.includes(citation.aiResponse.substring(0, 100))
-            );
-            if (shouldClear) {
-              console.log("onFinish: Cleared pending citations for message", message.id);
-              return [];
-            }
-            return prev;
-          });
-        }, 100);
+
+        // Link pending citations to this message
+        if (pendingCitations.length > 0) {
+          setMessageCitations(prev => ({
+            ...prev,
+            [message.id]: pendingCitations.map(citation => ({
+              ...citation,
+              messageId: message.id,
+              aiResponse: message.content
+            }))
+          }));
+          console.log(`Linked ${pendingCitations.length} citations to message ${message.id}`);
+          setPendingCitations([]);
+        }
       }
     }
   });
@@ -824,139 +700,22 @@ export function Chat() {
               chatId={chatId}
               message={message}
               isLoading={isLoading && messages.length - 1 === index}
-              citations={(() => {
-                // Get citations for this message using the same logic as before
-                const directCitations = messageCitations[message.id];
-                const contentHash = message.content?.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
-                const contentCitations = messageCitations[`content_${contentHash}`];
-                
-                // Also try content matching for robustness
-                let matchedCitations = null;
-                if (!directCitations && !contentCitations && message.content) {
-                  for (const [key, citations] of Object.entries(messageCitations)) {
-                    if (citations.length > 0 && citations[0].aiResponse) {
-                      const storedResponseStart = citations[0].aiResponse.substring(0, 200);
-                      const currentMessageStart = message.content.substring(0, 200);
-                      
-                      if (storedResponseStart && currentMessageStart && 
-                          storedResponseStart === currentMessageStart) {
-                        matchedCitations = citations;
-                        break;
-                      }
-                    }
-                  }
-                }
-                
-                return directCitations || contentCitations || matchedCitations;
-              })()}
-              onCitationClick={(citationNumber) => {
-                // Handle citation clicks - find which consolidated citation contains this original citation number
-                const citations = (() => {
-                  const directCitations = messageCitations[message.id];
-                  const contentHash = message.content?.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
-                  const contentCitations = messageCitations[`content_${contentHash}`];
-                  
-                  let matchedCitations = null;
-                  if (!directCitations && !contentCitations && message.content) {
-                    for (const [key, citationList] of Object.entries(messageCitations)) {
-                      if (citationList.length > 0 && citationList[0].aiResponse) {
-                        const storedResponseStart = citationList[0].aiResponse.substring(0, 200);
-                        const currentMessageStart = message.content.substring(0, 200);
-                        
-                        if (storedResponseStart && currentMessageStart && 
-                            storedResponseStart === currentMessageStart) {
-                          matchedCitations = citationList;
-                          break;
-                        }
-                      }
-                    }
-                  }
-                  
-                  return directCitations || contentCitations || matchedCitations || [];
-                })();
-
-                // Find which consolidated citation contains the clicked original citation number
-                let targetConsolidatedIndex = -1;
-                const originalCitation = citations.find(c => c.rank === citationNumber);
-                if (originalCitation) {
-                  // Group citations by document (same logic as ArtifactWidget)
-                  const documentGroups: { [key: string]: any[] } = {};
-                  citations.forEach(citation => {
-                    const docKey = citation.document || 'Unknown Document';
-                    if (!documentGroups[docKey]) {
-                      documentGroups[docKey] = [];
-                    }
-                    documentGroups[docKey].push(citation);
-                  });
-
-                  // Find which group contains our target citation
-                  const sortedGroups = Object.entries(documentGroups)
-                    .map(([document, citationGroup]) => ({
-                      document,
-                      citationGroup: citationGroup.sort((a, b) => a.rank - b.rank),
-                      avgRelevance: citationGroup.reduce((sum, c) => sum + (c.relevance_score || 0), 0) / citationGroup.length
-                    }))
-                    .sort((a, b) => b.avgRelevance - a.avgRelevance);
-
-                  targetConsolidatedIndex = sortedGroups.findIndex(group => 
-                    group.citationGroup.some(c => c.rank === citationNumber)
-                  );
-                }
-
-                // Scroll to and highlight the consolidated citation
-                const citationWidgets = document.querySelectorAll('.artifact-widget');
-                const targetWidget = Array.from(citationWidgets).find(widget => {
-                  const messageElement = widget.closest('.message-container') || widget.parentElement?.parentElement;
-                  return messageElement?.querySelector(`[data-message-id="${message.id}"]`);
-                });
-                
-                if (targetWidget && targetConsolidatedIndex >= 0) {
-                  targetWidget.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  // Highlight the specific consolidated citation
-                  const citationCards = targetWidget.querySelectorAll('.citation-card');
-                  const targetCard = citationCards[targetConsolidatedIndex];
-                  if (targetCard) {
-                    targetCard.classList.add('highlighted');
-                    setTimeout(() => targetCard.classList.remove('highlighted'), 2000);
-                    // Auto-expand the citation to show content
-                    (targetCard as HTMLElement).click();
-                  }
-                }
-              }}
+              citations={undefined}
+              onCitationClick={() => {}}
             />
             
             {/* Show citations for AI responses */}
             {message.role === 'assistant' && (() => {
               // Try multiple ways to find citations for this message
               const directCitations = messageCitations[message.id];
-              const contentHash = message.content.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
+              const contentHash = message.content?.substring(0, 50).replace(/[^a-zA-Z0-9]/g, '');
               const contentCitations = messageCitations[`content_${contentHash}`];
-              
-              // Also try to find citations by matching content from any stored citation
-              let matchedCitations = null;
-              if (!directCitations && !contentCitations && message.content) {
-                for (const [key, citations] of Object.entries(messageCitations)) {
-                  if (citations.length > 0 && citations[0].aiResponse) {
-                    // Check if the AI response content matches (first 200 chars)
-                    const storedResponseStart = citations[0].aiResponse.substring(0, 200);
-                    const currentMessageStart = message.content.substring(0, 200);
-                    
-                    if (storedResponseStart && currentMessageStart && 
-                        storedResponseStart === currentMessageStart) {
-                      console.log(`Found matching citations by content for message ${message.id} using key ${key}`);
-                      matchedCitations = citations;
-                      break;
-                    }
-                  }
-                }
-              }
-              
-              const citations = directCitations || contentCitations || matchedCitations;
-              
-              
+
+              const citations = directCitations || contentCitations;
+
               return citations && citations.length > 0 ? (
                 <div className="w-full mx-auto max-w-3xl px-4 mb-4">
-                  <ArtifactWidget 
+                  <ArtifactWidget
                     citations={citations}
                     title="Sources for this response"
                     className="max-w-full"
