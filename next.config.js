@@ -27,6 +27,10 @@ const nextConfig = {
         destination: `${backendUrl}/api/sessions/:path*`,
       },
       {
+        source: '/api/chat',
+        destination: `${backendUrl}/api/chat`,
+      },
+      {
         source: '/api/chat/stream',
         destination: `${backendUrl}/api/chat/stream`,
       },

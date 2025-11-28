@@ -60,6 +60,10 @@ const vercelConfig = {
       "destination": `${cleanBackendUrl}/api/chat`
     },
     {
+      "source": "/api/chat/stream",
+      "destination": `${cleanBackendUrl}/api/chat/stream`
+    },
+    {
       "source": "/api/data-extraction",
       "destination": `${cleanBackendUrl}/api/data-extraction`
     },

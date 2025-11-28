@@ -40,6 +40,10 @@
       "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/chat"
     },
     {
+      "source": "/api/chat/stream",
+      "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/chat/stream"
+    },
+    {
       "source": "/api/data-extraction",
       "destination": "https://aura-yv-assistant-a3da4a835627.herokuapp.com/api/data-extraction"
     },
