@@ -356,7 +356,7 @@ export function Chat() {
       const url = typeof input === 'string' ? input : input.toString();
       const body = JSON.parse(init?.body as string || '{}');
       const lastMessage = body.messages?.[body.messages.length - 1];
-      
+
       if (lastMessage) {
         // Wait for hydration and session to be created if it's not ready yet
         if (!isHydrated || !sessionId) {
@@ -364,20 +364,20 @@ export function Chat() {
           toast.error("Session not ready. Please wait a moment and try again.");
           throw new Error("Session not ready");
         }
-        
+
         console.log("Using session:", sessionId);
-        
+
         // Convert AI SDK format to backend format
         const backendBody = {
           session_id: sessionId,
           message: lastMessage.content
         };
-        
+
         console.log("Sending request:", backendBody);
-        
+
         // Use relative URLs to go through Next.js rewrites
         const apiUrl = '';
-        
+
         const response = await fetch(`${apiUrl}/api/chat/stream`, {
           ...init,
           body: JSON.stringify({
@@ -388,12 +388,16 @@ export function Chat() {
             session_id: sessionId
           })
         });
-        
+
         console.log("Response status:", response.status);
-        
+        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
         if (response.ok) {
           // Response should be streaming format from /api/chat/stream
           console.log("Received streaming response from backend");
+          console.log("✅ Passing response directly to AI SDK (no wrapper)");
+
+          // Just return the response directly - backend now sends proper format
           return response;
         } else {
           const errorText = await response.text();
@@ -401,7 +405,7 @@ export function Chat() {
           throw new Error(`Streaming API Error: ${response.status} - ${errorText}`);
         }
       }
-      
+
       return fetch(url, init);
     },
     maxSteps: 4,
@@ -412,23 +416,37 @@ export function Chat() {
         );
       }
     },
-    onFinish: (message: any) => {
+    onFinish: (message: any, options: any) => {
       // Store citations for the last assistant message if available
       if (message.role === 'assistant' && message.id && message.content) {
-        console.log("Message finished:", message.id, message.content);
+        console.log("Message finished:", message.id);
+        console.log("Finish options:", options);
 
-        // Link pending citations to this message
-        if (pendingCitations.length > 0) {
+        // Extract citations from the finish data (sent by backend in d: completion signal)
+        const citationsFromFinish = options?.experimental_providerMetadata?.citations ||
+                                    options?.citations ||
+                                    [];
+
+        console.log("Citations from finish data:", citationsFromFinish);
+
+        // Use citations from finish data if available, otherwise use pending citations
+        const citations = citationsFromFinish.length > 0
+          ? citationsFromFinish
+          : pendingCitations;
+
+        if (citations.length > 0) {
           setMessageCitations(prev => ({
             ...prev,
-            [message.id]: pendingCitations.map(citation => ({
+            [message.id]: citations.map((citation: any) => ({
               ...citation,
               messageId: message.id,
               aiResponse: message.content
             }))
           }));
-          console.log(`Linked ${pendingCitations.length} citations to message ${message.id}`);
+          console.log(`✅ Linked ${citations.length} citations to message ${message.id}`);
           setPendingCitations([]);
+        } else {
+          console.log("⚠️ No citations found in finish data or pending");
         }
       }
     }

@@ -1,14 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    turbo: {
-      rules: {
-        '*.css': {
-          loaders: ['postcss-loader'],
-        },
-      },
-    },
-  },
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     console.log('Using backend URL for rewrites:', backendUrl);

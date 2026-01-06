@@ -86,6 +86,7 @@ export const PreviewMessage = ({
   message,
   citations,
   onCitationClick,
+  isLoading,
 }: {
   chatId: string;
   message: Message;
@@ -93,6 +94,15 @@ export const PreviewMessage = ({
   citations?: any[];
   onCitationClick?: (citationNumber: number) => void;
 }) => {
+  // DEBUG: Log final message content only (not during streaming)
+  React.useEffect(() => {
+    if (message.content && message.role === 'assistant' && !isLoading) {
+      console.log('✅ Final message content:', message.content);
+      console.log('✅ Message length:', (message.content as string).length);
+      console.log('✅ Has markdown?', /[#*\-\[]/.test(message.content as string));
+    }
+  }, [message.content, message.role, isLoading]);
+
   return (
     <motion.div
       className="w-full mx-auto max-w-3xl px-4 group/message"
@@ -114,7 +124,7 @@ export const PreviewMessage = ({
         <div className="flex flex-col gap-2 w-full">
           {message.content && (
             <div className="flex flex-col gap-4">
-              <MarkdownWithCitations 
+              <MarkdownWithCitations
                 content={message.content as string}
                 citations={citations}
                 onCitationClick={onCitationClick}
